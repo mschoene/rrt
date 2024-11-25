@@ -18,7 +18,19 @@ class Environment:
             if obstacle.contains_point((node.x, node.y)):
                 return False
         return True
-    
+    def is_collision_free_path(env, node1, node2):
+        """Check if path between two nodes is collision free"""
+        # Create a few test points along the line
+        points = 3 #cause we want to be efficient, add more if you want to be save
+        for i in range(points):
+            t = i / (points - 1)
+            test_node = Node(
+                node1.x + t * (node2.x - node1.x),
+                node1.y + t * (node2.y - node1.y)
+            )
+            if not env.is_collision_free(test_node):
+                return False
+        return True   
 
 class Node:
     def __init__(self, x, y, parent=None):
@@ -83,42 +95,101 @@ def check_goal_reached(node, goal_node, goal_radius):
     return distance_to_goal <= goal_radius
 
 
-# def find_neighbors(nodes, new_node, radius):
-    # """Return a list of nodes within a specified radius from new_node."""
-    # return [node for node in nodes if node_distance(node, new_node) <= radius]
-# 
-
-def find_neighbors(nodes, x, gamma=0.75, d=2, max_threshold=0.50, min_threshold=0.0001):
+def find_neighbors(nodes, x, gamma=2, d=2.5): #.5):
     n = len(nodes)  # Total number of nodes in the tree
-    threshold = min(gamma * (math.log(n) / n) ** (1 / d)+0.0001, 10.)  #  threshold distance
 
-    print(threshold)
+    threshold = gamma * (math.log(n) / n) ** (1 / d) 
     
     neighbors = []
-
     for node in nodes:
-        # Calculate Euclidean distance between node and point x
-        distance = np.linalg.norm(np.array([node.x, node.y]) - np.array([x.x, x.y])) 
+        distance = np.linalg.norm(np.array([node.x, node.y]) - np.array([x.x, x.y]))
         if distance <= threshold:
             neighbors.append(node)
-
-    while len(neighbors) == 0:
-        threshold *= 1.2
-        print(f"No neighbors found. New threshold: {threshold}")
-        
-        # Recalculate neighbors with the updated threshold
-        neighbors = []
-        for node in nodes:
-            distance = np.linalg.norm(np.array([node.x, node.y]) - np.array([x.x, x.y])) 
-            if distance <= threshold:
-                neighbors.append(node)
-
-        # Optionally, stop if the threshold exceeds a maximum value
-        if threshold > max_threshold :  # You can adjust this multiplier as needed
-            print("Threshold exceeded maximum limit, stopping search.")
-            break
     
     return neighbors
 
+
 def node_distance(node, goal_node):
     return ((node.x - goal_node.x) ** 2 + (node.y - goal_node.y) ** 2) ** 0.5
+
+
+
+
+def env_is_collision_free_path(env, node1, node2):
+    """Check if path between two nodes is collision free"""
+    # Create a few test points along the line
+    points = 10
+    for i in range(points):
+        t = i / (points - 1)
+        test_node = Node(
+            node1.x + t * (node2.x - node1.x),
+            node1.y + t * (node2.y - node1.y)
+        )
+        if not env.is_collision_free(test_node):
+            return False
+    return True
+
+
+def rewire(new_node, neighbors, env, nodes):
+    """
+    Rewire the tree through the new node if it provides better paths
+    
+    Args:
+        new_node: Newly added node
+        neighbors: List of neighboring nodes
+        env: Environment for collision checking
+        nodes: Global list of all nodes
+    """
+    for neighbor in neighbors:
+        # Calculate potential new cost through new_node
+        potential_cost = new_node.cost + node_distance(new_node, neighbor)
+        
+        if potential_cost < neighbor.cost:
+            # Check if path is collision free
+            if env.is_collision_free_path(new_node, neighbor):
+                neighbor.parent = new_node
+                neighbor.cost = potential_cost
+                # Update costs of all descendants
+                update_descendant_costs(neighbor, nodes)
+
+
+def choose_parent(new_node, neighbors, env):
+    """
+    Choose the best parent for a new node from its neighbors.
+    
+    Args:
+        new_node: Node to find parent for
+        neighbors: List of potential parent nodes
+        env: Environment object for collision checking
+    
+    Returns:
+        Best parent node and associated cost
+    """
+    if not neighbors:
+        return None, float('inf')
+        
+    min_cost = float('inf')
+    best_parent = None
+    
+    for potential_parent in neighbors:
+        # Calculate new cost through this potential parent
+        cost_through_parent = potential_parent.cost + new_node.distance_to(potential_parent)
+        
+        if cost_through_parent < min_cost:
+            # Check if path to this parent is collision-free
+            if not env.check_collision_line(new_node, potential_parent):
+                min_cost = cost_through_parent
+                best_parent = potential_parent
+
+    return best_parent, min_cost
+
+
+def update_descendant_costs(node, nodes):
+    """Update costs of all nodes that have this node as their parent"""
+    for descendant in nodes:
+        if descendant.parent == node:
+            descendant.cost = node.cost + node_distance(node, descendant)
+            update_descendant_costs(descendant, nodes)
+
+
+

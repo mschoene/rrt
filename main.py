@@ -17,7 +17,7 @@ import time
 STEP_SIZE = 0.5  # You can adjust this value as needed
 GOAL_RADIUS = STEP_SIZE
 MAX_STEPS = 50 # let's not go to inifinity and beyond!
-GIF_FOLDER = 'randTree_1p1_frames'  # Folder to save frames
+GIF_FOLDER = 'motion_planning_steps'  # Folder to save frames
 FINAL_FRAME_PATH = os.path.join(GIF_FOLDER, "final_frame.png")
 REWIRE_RADIUS = 0.7
 
@@ -28,10 +28,11 @@ global_goal_reached = False
 global_shortest_cost = float('inf')
 
 # Set up environment dimensions and obstacles
+
 env = Environment(10, 10)
-env.add_obstacle(Circle((3, 2.2), 1.3 ))  # circle
-env.add_obstacle(Rectangle((2, 6), 1, 3 ))  # rectancle
-env.add_obstacle(Rectangle((5.5, 0.5), 3, 3))  #  square
+env.add_obstacle(Circle((2, 2.2), 1.1 ))  # circle
+env.add_obstacle(Rectangle((2, 6), 1, 2 ))  # rectancle
+env.add_obstacle(Rectangle((6.5, 0.5), 2, 2))  #  square
 
 env.add_obstacle(Rectangle((7.05, 8.75), 0.5, 2.5, angle=140))  # m line left
 env.add_obstacle(Rectangle((6.8, 7.2), 0.5, 1.5, angle=10))  # m middle left
@@ -50,7 +51,7 @@ start_node = nodes[0]
 output_folder = "motion_planning_steps"
 os.makedirs(output_folder, exist_ok=True)
 
-
+#TAMP/assignment/rrt/randTree_1p1_frames/step_0000.png
 
 
 
@@ -81,9 +82,10 @@ def run_simulation_streaming(steps, algorithm_choice = "RT", heuristic_probabili
             random_point = sample_random_point(env)
             parent_node = None
 
+
             if algorithm_choice == "RT":
                 # Heuristic-based node selection
-                if random.random() < heuristic_probability:  # Select nearest node based on heuristic
+                if random.random() <= heuristic_probability:  # Select nearest node based on heuristic
                     parent_node = get_nearest_node(global_nodes, goal_node)
                 else:  # Otherwise, select a random node
                     parent_node = sample_random_node(global_nodes)
@@ -91,6 +93,7 @@ def run_simulation_streaming(steps, algorithm_choice = "RT", heuristic_probabili
                 # Try extending towards the random point
                 new_node = extend_tree_towards(parent_node, random_point, max_step_size=STEP_SIZE)
 
+ 
                 # Check if the new node is collision-free; if so, break out of the loop
                 if env.is_collision_free(new_node):
                     global_nodes.append(new_node)
@@ -108,36 +111,57 @@ def run_simulation_streaming(steps, algorithm_choice = "RT", heuristic_probabili
 
                 # Check if the new node is collision-free; if so, break out of the loop
                 if env.is_collision_free(new_node):
-                    global_nodes.append(new_node)
-                    break  # Exit the resampling loop if the node is valid
+                    if env.is_collision_free_path(parent_node, new_node):
+                        global_nodes.append(new_node)
+                        break  # Exit the resampling loop if the node is valid
 
 
 
             elif algorithm_choice == "RRT*":
+
+                nearest_node = get_nearest_node(global_nodes, random_point)
+                # Extend towards random point
+                new_node = extend_tree_towards(nearest_node, random_point, max_step_size=STEP_SIZE)
+        
+                if not env.is_collision_free(new_node):
+                    continue
+
                 # For RRT*, connect to nearest node but optimize the path with rewiring
-                #parent_node = min(nodes, key=lambda node: straight_line_distance_to_goal(node, random_point))
-                parent_node = get_nearest_node(global_nodes, random_point)
-
-                new_node = extend_tree_towards(parent_node, random_point, max_step_size=STEP_SIZE)
-
-                if env.is_collision_free(new_node):
-                    # Check nearby nodes within a radius to rewire
-                    neighbors = find_neighbors(global_nodes, new_node) #, radius=REWIRE_RADIUS)
-                    best_parent = min(neighbors, key=lambda n: n.cost + node_distance(n, new_node))
-
-                    # Connect the new node to the best parent
-                    new_node.parent = best_parent
-                    new_node.cost = best_parent.cost + node_distance(best_parent, new_node)
-
-                    # Rewire neighbors to the new node if it provides a shorter path
-                    for neighbor in neighbors:
-                        new_cost = new_node.cost + node_distance(new_node, neighbor)
-                        if new_cost < neighbor.cost:
-                            neighbor.parent = new_node
-                            neighbor.cost = new_cost
-
+                if len(global_nodes) == 1:
+                    new_node.parent = global_nodes[0]
+                    new_node.cost = node_distance(global_nodes[0], new_node)
                     global_nodes.append(new_node)
-                    break
+                    continue
+                
+                # import pdb; pdb.set_trace()
+
+                # Find neighboring nodes within dynamic radius
+                neighbors = find_neighbors(global_nodes, new_node, gamma=3.0)  # gamma=3.0
+                
+                # Choose best parent from neighbors
+                best_parent = nearest_node  # Default to nearest node
+                min_cost = nearest_node.cost + node_distance(nearest_node, new_node)
+                
+                for potential_parent in neighbors:
+                    # Calculate cost through this potential parent
+                    potential_cost = potential_parent.cost + node_distance(potential_parent, new_node)
+                    
+                    if potential_cost < min_cost:
+                        # Check if connection is collision-free
+                        if env.is_collision_free_path(potential_parent, new_node):
+                            min_cost = potential_cost
+                            best_parent = potential_parent
+                
+                # Connect new node to best parent
+                new_node.parent = best_parent
+                new_node.cost = min_cost
+                global_nodes.append(new_node)
+                
+                # Rewire neighbors through new node if it provides better path
+                rewire(new_node, neighbors, env, global_nodes)
+                break
+                    
+    
                 
 
 
@@ -185,14 +209,16 @@ def reset_simulation():
 
 
 
-# Gradio UI update with slider for heuristic probability
+
+
+# Gradio UI 
 with gr.Blocks() as demo:
     gr.Markdown("### RT/RRT/RRT*")
 
     algorithm_choice = gr.Radio(["RT", "RRT", "RRT*"], label="Algorithm Choice", value="RT")    
 
     with gr.Row():
-        heuristic_slider = gr.Slider(minimum=0, maximum=1, value=1, step=0.01, label="Heuristic Probability")
+        heuristic_slider = gr.Slider(minimum=0, maximum=1, value=1, step=0.1, label="Heuristic Probability (for RT only)")
     
     with gr.Row():
         add_1_button = gr.Button("Add 1 Step")
@@ -206,13 +232,22 @@ with gr.Blocks() as demo:
         final_frame_output = gr.Image(type="pil", label="Current graph", streaming=True)
         gif_output = gr.Image(type="filepath", label="GIF")
 
-    #button funcs: pass args
-    add_1_button.click(run_simulation_streaming, inputs=[gr.Number(value=1), algorithm_choice], outputs=[final_frame_output, gif_output])
-    add_10_button.click(run_simulation_streaming, inputs=[gr.Number(value=10), algorithm_choice], outputs=[final_frame_output, gif_output])
-    add_50_button.click(run_simulation_streaming, inputs=[gr.Number(value=50), algorithm_choice], outputs=[final_frame_output, gif_output])
-    add_100_button.click(run_simulation_streaming, inputs=[gr.Number(value=100), algorithm_choice], outputs=[final_frame_output, gif_output])
-    add_500_button.click(run_simulation_streaming, inputs=[gr.Number(value=500), algorithm_choice], outputs=[final_frame_output, gif_output])
+    # Button functions with slider input
+    add_1_button.click(run_simulation_streaming, 
+                    inputs=[gr.Number(value=1), algorithm_choice, heuristic_slider], 
+                    outputs=[final_frame_output, gif_output])
+    add_10_button.click(run_simulation_streaming, 
+                    inputs=[gr.Number(value=10), algorithm_choice, heuristic_slider], 
+                    outputs=[final_frame_output, gif_output])
+    add_50_button.click(run_simulation_streaming, 
+                    inputs=[gr.Number(value=50), algorithm_choice, heuristic_slider], 
+                    outputs=[final_frame_output, gif_output])
+    add_100_button.click(run_simulation_streaming, 
+                        inputs=[gr.Number(value=100), algorithm_choice, heuristic_slider], 
+                        outputs=[final_frame_output, gif_output])
+    add_500_button.click(run_simulation_streaming, 
+                        inputs=[gr.Number(value=500), algorithm_choice, heuristic_slider], 
+                        outputs=[final_frame_output, gif_output])
     reset_button.click(reset_simulation, outputs=[final_frame_output, gif_output])
-
 
 demo.launch()

@@ -25,32 +25,49 @@ def create_gif(folder_path, gif_name='planning.gif', duration=200):
 
 
 
-
 def draw_shortest_path(ax, nodes, goal_node, goal_reached, current_shortest_path):
     # Find the nearest node to the goal (if the goal isn't reached directly)
     nearest_node = get_nearest_node(nodes, goal_node)
     
     path = []
     current_node = nearest_node
-    path_cost = 0  # Track the cumulative cost of the path
-
+    
+    # Build the path by backtracking from nearest_node to start
     while current_node is not None:
         path.append(current_node)
-        if current_node.parent is not None:
-            # Add the actual distance (cost) from the current node to its parent
-            path_cost += current_node.cost  # Use node's cost attribute for accurate path cost
         current_node = current_node.parent
     
     # Reverse to go from start to goal
     path = path[::-1]
+    path_cost = nearest_node.cost
     
+    # Update shortest path if this path is shorter
     if path_cost < current_shortest_path:
         current_shortest_path = path_cost
+        
+        # Draw the path if goal is reached
         if goal_reached:
             for i in range(len(path) - 1):
-                ax.plot([path[i].x, path[i+1].x], [path[i].y, path[i+1].y], 'r-', linewidth=2)
+                ax.plot([path[i].x, path[i+1].x], 
+                       [path[i].y, path[i+1].y], 
+                       'r-', linewidth=2)
     
     return current_shortest_path
+    # while current_node is not None:
+    #     path.append(current_node)
+    #     if current_node.parent is not None:
+    #         # Add the actual distance (cost) from the current node to its parent
+    #         path_cost += current_node.cost  # Use node's cost attribute for accurate path cost
+    #     current_node = current_node.parent
+    
+    # # Reverse to go from start to goal
+    # path = path[::-1]
+    
+    # if path_cost < current_shortest_path:
+    #     current_shortest_path = path_cost
+    #     if goal_reached:
+    #         for i in range(len(path) - 1):
+    #             ax.plot([path[i].x, path[i+1].x], [path[i].y, path[i+1].y], 'r-', linewidth=2)
     
 
 # Draw environment and obstacles
