@@ -25,4 +25,10 @@ And then just run
 python main.py
 ```
 
-and open the generated link. Play around with the different algorithms and settings. Remember to save a gif of your test if you wish to keep it. 
+and open the generated link. Play around with the different algorithms and settings. Remember to save a gif of your test if you wish to keep it such as the examples below. 
+
+![](https://github.com/mschoene/rrt/blob/main/gifs/rt.gif)
+![](https://github.com/mschoene/rrt/blob/main/gifs/rt_heuristic.gif)
+
+![](https://github.com/mschoene/rrt/blob/main/gifs/rrt.gif)
+![](https://github.com/mschoene/rrt/blob/main/gifs/rrt_star.gif)
