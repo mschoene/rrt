@@ -1,7 +1,7 @@
 # TAMP Assignment implementation
-## Tuly understanding sampling-based motion planning
+## Truly understanding sampling-based motion planning
 
-## Overviewe
+## Overview
 
 This repository implements sampling algorithm to more or less efficiently explore a 2D environment. Gradio is used to 
 
